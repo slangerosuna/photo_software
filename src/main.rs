@@ -1,12 +1,15 @@
-#![allow(incomplete_features)] // to suppress warning in following line
+#![allow(incomplete_features)]
+#![allow(unused)] // TODO: remove when done
 #![feature(generic_const_exprs)]
 #![feature(iter_next_chunk)]
+#![feature(iter_intersperse)]
 
-pub mod shaders;
+pub mod kernel;
 
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    workspace::init_blend_mode_list();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(8)
         .enable_all()
@@ -20,14 +23,14 @@ fn main() -> eframe::Result {
     });
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1024.0, 768.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]),
         renderer: eframe::Renderer::Wgpu,
+
         ..Default::default()
     };
 
     eframe::run_native(
-        "bppe",
+        "BPics",
         options,
         Box::new(|_cc| {
             let app = App::new(gpu, runtime);
@@ -50,7 +53,11 @@ pub struct App {
 
 impl App {
     pub fn new(gpu: GpuDevice, runtime: tokio::runtime::Runtime) -> Self {
-        Self { gpu, runtime, workspace: Workspace::default() }
+        Self {
+            gpu,
+            runtime,
+            workspace: Workspace::default(),
+        }
     }
 }
 
@@ -60,8 +67,7 @@ impl eframe::App for App {
             ui.heading("Left Panel");
             ui.label("This is a simple egui app.");
         });
-        egui::CentralPanel::default().show(ctx, |ui| {
-        });
+        egui::CentralPanel::default().show(ctx, |ui| {});
     }
 }
 
@@ -109,10 +115,34 @@ impl GpuDevice {
             convolution_shader: None,
         })
     }
-    pub async fn compile_shaders(&mut self) {
-        let (kernel_shader,) = tokio::join!(self.compile_kernel_shader(),);
+    pub async fn compile_shaders(&mut self) -> std::io::Result<()> {
+        let mut ret: std::io::Result<()> = Ok(());
 
-        self.kernel_shader = Some(kernel_shader);
+        macro_rules! process_result {
+            ($shader:ident) => {
+                if let Ok(shader) = $shader {
+                    self.$shader = Some(shader);
+                } else {
+                    if ret.is_ok() {
+                        ret = Err($shader.err().unwrap());
+                    } else {
+                        ret = Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!(
+                                "{}\n{}",
+                                ret.err().unwrap().to_string(),
+                                $shader.err().unwrap().to_string()
+                            ),
+                        ));
+                    }
+                }
+            };
+        }
+
+        let (kernel_shader,) = tokio::join!(self.compile_kernel_shader(),);
+        process_result!(kernel_shader);
+
+        ret
     }
 
     pub async fn texture_to_image(

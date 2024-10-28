@@ -1,20 +1,15 @@
-use std::{io::Cursor, default::Default};
+use std::{default::Default, io::Cursor};
 
 use egui::PaintCallbackInfo;
 use egui_wgpu::CallbackTrait;
-use image::{ImageReader, ImageFormat};
+use image::{ImageFormat, ImageReader};
 use serde::{Deserialize, Serialize};
 use wgpu::*;
 
 use crate::GpuDevice;
 
-mod texture_serialization;
-
 impl Workspace {
-    pub fn load(
-        path: &str,
-        gpu: &GpuDevice
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn load(path: &str, gpu: &GpuDevice) -> Result<Self, Box<dyn std::error::Error>> {
         let data = std::fs::read(path)?;
         let bincode_end = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
         let mut this = bincode::deserialize(&data[4..bincode_end])?;
@@ -24,7 +19,9 @@ impl Workspace {
 
         loop {
             let len: Result<[u8; 4], _> = data.next_chunk::<4>();
-            if len.is_err() { break; }
+            if len.is_err() {
+                break;
+            }
 
             let len: [u8; 4] = len.unwrap();
             let len = u32::from_le_bytes(len) as usize;
@@ -84,13 +81,7 @@ impl Workspace {
         Ok(this)
     }
 
-    fn save(
-        &self,
-        path: &str,
-        gpu: &GpuDevice
-    ) {
-
-    }
+    fn save(&self, path: &str, gpu: &GpuDevice) {}
 }
 
 #[derive(Serialize, Deserialize)]
@@ -115,10 +106,36 @@ pub struct LayerInfo {
     blend_mode: BlendMode,
 }
 
-#[derive(Serialize, Deserialize)]
-pub enum BlendMode {
-    Normal,
-    //TODO: Add and implement more blend modes
+pub type BlendMode = String;
+
+pub fn init_blend_mode_list() {
+    let blend_modes = std::fs::read_dir("./shaders/blend_modes")
+        .unwrap()
+        .map(|blend_mode| {
+            blend_mode
+                .unwrap()
+                .file_name()
+                .into_string()
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap()
+                .split('_')
+                .intersperse(" ")
+                .collect::<String>()
+                .trim()
+                .to_string()
+        })
+        .map(|w| {
+            let mut w = w.chars();
+            w.next()
+                .unwrap()
+                .to_uppercase()
+                .chain(w)
+                .collect::<String>()
+        })
+        .collect::<Vec<String>>();
+    println!("{:?}", blend_modes)
 }
 
 impl Default for Workspace {
@@ -141,6 +158,5 @@ impl CallbackTrait for Workspace {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &'a egui_wgpu::CallbackResources,
     ) {
-
     }
 }

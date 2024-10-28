@@ -4,13 +4,15 @@ use image::{ImageBuffer, Rgba};
 use wgpu::*;
 
 impl GpuDevice {
-    pub async fn compile_kernel_shader(&self) -> ShaderModule {
+    pub async fn compile_kernel_shader(&self) -> std::io::Result<ShaderModule> {
         let kernel_shader = self.device.create_shader_module(ShaderModuleDescriptor {
             label: None,
-            source: ShaderSource::Wgsl(include_str!("kernel.wgsl").into()),
+            source: ShaderSource::Wgsl(
+                std::fs::read_to_string("shaders/filters/kernel.wgsl")?.into(),
+            ),
         });
 
-        kernel_shader
+        Ok(kernel_shader)
     }
 }
 
