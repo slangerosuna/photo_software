@@ -37,7 +37,7 @@ impl Workspace {
 
             #[cfg(debug_assertions)]
             print!("Creating input texture...\n");
-            let input_texture = gpu.device.create_texture(&TextureDescriptor {
+            let input_texture = gpu.render_state.device.create_texture(&TextureDescriptor {
                 label: None,
                 size: Extent3d {
                     width: width,
@@ -57,7 +57,7 @@ impl Workspace {
 
             #[cfg(debug_assertions)]
             print!("Writing input texture...\n");
-            gpu.queue.write_texture(
+            gpu.render_state.queue.write_texture(
                 ImageCopyTexture {
                     texture: &input_texture,
                     mip_level: 0,
@@ -107,36 +107,6 @@ pub struct LayerInfo {
 }
 
 pub type BlendMode = String;
-
-pub fn init_blend_mode_list() {
-    let blend_modes = std::fs::read_dir("./shaders/blend_modes")
-        .unwrap()
-        .map(|blend_mode| {
-            blend_mode
-                .unwrap()
-                .file_name()
-                .into_string()
-                .unwrap()
-                .split('.')
-                .next()
-                .unwrap()
-                .split('_')
-                .intersperse(" ")
-                .collect::<String>()
-                .trim()
-                .to_string()
-        })
-        .map(|w| {
-            let mut w = w.chars();
-            w.next()
-                .unwrap()
-                .to_uppercase()
-                .chain(w)
-                .collect::<String>()
-        })
-        .collect::<Vec<String>>();
-    println!("{:?}", blend_modes)
-}
 
 impl Default for Workspace {
     fn default() -> Self {

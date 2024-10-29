@@ -10,7 +10,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID: vec3<u32>) {
     let pixel = vec4<f32>(textureLoad(inImage, vec2<i32>(pixelCoord)));
     let cur = vec4<f32>(textureLoad(running_total, vec2<i32>(pixelCoord)));
 
-    let blended_color = cur.rgb + (pixel.rgb * 2.0 - 1.0) * (cur.rgb * (1.0 - cur.rgb));
+    let blended_color = (1.0 - 2.0 * pixel.rgb) * cur.rgb * cur.rgb + 2.0 * pixel.rgb * cur.rgb;
     let out_alpha = pixel.a + cur.a * (1.0 - pixel.a);
 
     textureStore(running_total, vec2<i32>(pixelCoord), vec4<f32>(blended_color, out_alpha));

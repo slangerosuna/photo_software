@@ -5,26 +5,35 @@
 #![feature(iter_intersperse)]
 
 pub mod kernel;
+mod workspace;
+
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use eframe::egui;
+use egui_wgpu::{RenderState, WgpuConfiguration};
+use tokio::runtime::Runtime;
+use workspace::Workspace;
 
 fn main() -> eframe::Result {
-    workspace::init_blend_mode_list();
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(8)
         .enable_all()
         .build()
         .unwrap();
 
-    let gpu = runtime.block_on(async {
-        let mut gpu = GpuDevice::new().await.unwrap();
-        gpu.compile_shaders().await;
-        gpu
-    });
+    let rt_arc = Arc::new(runtime);
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1024.0, 768.0]),
         renderer: eframe::Renderer::Wgpu,
+        wgpu_options: WgpuConfiguration {
+            device_descriptor: Arc::new(|_| DeviceDescriptor {
+                required_features: Features::default()
+                    | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
 
         ..Default::default()
     };
@@ -32,8 +41,10 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "BPics",
         options,
-        Box::new(|_cc| {
-            let app = App::new(gpu, runtime);
+        Box::new(|cc| {
+            let render_state = cc.wgpu_render_state.clone().unwrap();
+            let gpu = rt_arc.block_on(GpuDevice::new(render_state)).unwrap();
+            let app = App::new(gpu, rt_arc.clone());
 
             Ok(Box::new(app))
         }),
@@ -42,17 +53,14 @@ fn main() -> eframe::Result {
     Ok(())
 }
 
-mod workspace;
-use workspace::Workspace;
-
 pub struct App {
     gpu: GpuDevice,
-    runtime: tokio::runtime::Runtime,
+    runtime: Arc<Runtime>,
     workspace: Workspace,
 }
 
 impl App {
-    pub fn new(gpu: GpuDevice, runtime: tokio::runtime::Runtime) -> Self {
+    pub fn new(gpu: GpuDevice, runtime: Arc<Runtime>) -> Self {
         Self {
             gpu,
             runtime,
@@ -75,10 +83,8 @@ use image::{GenericImageView, ImageBuffer, Rgba};
 use wgpu::*;
 
 pub struct GpuDevice {
-    pub device: Device,
-    pub queue: Queue,
-    pub kernel_shader: Option<ShaderModule>,
-    pub convolution_shader: Option<ShaderModule>,
+    pub render_state: RenderState,
+    pub shaders: HashMap<String, ShaderModule>,
 }
 
 #[inline]
@@ -86,63 +92,57 @@ pub fn pad_to_multiple_of_256(n: u32) -> u32 {
     (n + 255) & !255
 }
 
-impl GpuDevice {
-    pub async fn new() -> Option<Self> {
-        let instance = Instance::new(InstanceDescriptor {
-            ..Default::default()
-        });
-        let adapter = instance
-            .request_adapter(&RequestAdapterOptions {
-                ..Default::default()
-            })
-            .await?;
-        let (device, queue) = adapter
-            .request_device(
-                &DeviceDescriptor {
-                    required_features: Features::default()
-                        | Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    ..Default::default()
-                },
-                None,
-            )
-            .await
-            .ok()?;
+fn gather_all_files(root: PathBuf) -> Vec<PathBuf> {
+    let read_dir = std::fs::read_dir(root).unwrap();
+    let mut files = Vec::new();
 
-        Some(Self {
-            device,
-            queue,
-            kernel_shader: None,
-            convolution_shader: None,
-        })
+    for entry in read_dir {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.is_dir() {
+            files.extend(gather_all_files(path));
+        } else {
+            files.push(path);
+        }
     }
-    pub async fn compile_shaders(&mut self) -> std::io::Result<()> {
-        let mut ret: std::io::Result<()> = Ok(());
 
-        macro_rules! process_result {
-            ($shader:ident) => {
-                if let Ok(shader) = $shader {
-                    self.$shader = Some(shader);
-                } else {
-                    if ret.is_ok() {
-                        ret = Err($shader.err().unwrap());
-                    } else {
-                        ret = Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!(
-                                "{}\n{}",
-                                ret.err().unwrap().to_string(),
-                                $shader.err().unwrap().to_string()
-                            ),
-                        ));
-                    }
-                }
-            };
+    files
+}
+
+impl GpuDevice {
+    pub async fn new(render_state: RenderState) -> Option<Self> {
+        let mut shaders = HashMap::new();
+        let files = gather_all_files(PathBuf::from("./shaders"));
+        for file in files {
+            let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
+            if file_extension == "wgsl" {
+                let module = render_state
+                    .device
+                    .create_shader_module(ShaderModuleDescriptor {
+                        label: None,
+                        source: ShaderSource::Wgsl(
+                            std::fs::read_to_string(file.clone()).unwrap().into(),
+                        ),
+                    });
+                let relative_file = file
+                    .strip_prefix("./shaders")
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .split('.')
+                    .next()
+                    .unwrap()
+                    .to_string();
+                #[cfg(debug_assertions)]
+                print!("Loaded shader: {}\n", relative_file);
+                shaders.insert(relative_file, module);
+            }
         }
 
-        let (kernel_shader,) = tokio::join!(self.compile_kernel_shader(),);
-        process_result!(kernel_shader);
-
-        ret
+        Some(Self {
+            render_state,
+            shaders,
+        })
     }
 
     pub async fn texture_to_image(
@@ -163,9 +163,10 @@ impl GpuDevice {
             usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         };
-        let buffer = self.device.create_buffer(&buffer_desc);
+        let buffer = self.render_state.device.create_buffer(&buffer_desc);
 
         let mut encoder = self
+            .render_state
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
         encoder.copy_texture_to_buffer(
@@ -186,7 +187,7 @@ impl GpuDevice {
             size,
         );
 
-        self.queue.submit(Some(encoder.finish()));
+        self.render_state.queue.submit(Some(encoder.finish()));
         let buffer_slice = buffer.slice(..);
 
         buffer_slice.map_async(MapMode::Read, |result| {
@@ -195,7 +196,7 @@ impl GpuDevice {
                 return;
             }
         });
-        self.device.poll(Maintain::Wait);
+        self.render_state.device.poll(Maintain::Wait);
 
         let data = buffer_slice.get_mapped_range();
 

@@ -5,12 +5,15 @@ use wgpu::*;
 
 impl GpuDevice {
     pub async fn compile_kernel_shader(&self) -> std::io::Result<ShaderModule> {
-        let kernel_shader = self.device.create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(
-                std::fs::read_to_string("shaders/filters/kernel.wgsl")?.into(),
-            ),
-        });
+        let kernel_shader = self
+            .render_state
+            .device
+            .create_shader_module(ShaderModuleDescriptor {
+                label: None,
+                source: ShaderSource::Wgsl(
+                    std::fs::read_to_string("filters/kernel")?.into(),
+                ),
+            });
 
         Ok(kernel_shader)
     }
@@ -26,7 +29,7 @@ impl Kernel {
         #[cfg(debug_assertions)]
         print!("Creating kernel with size {}x{}...\n", i, j);
 
-        let texture = gpu.device.create_texture(&TextureDescriptor {
+        let texture = gpu.render_state.device.create_texture(&TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: i,
@@ -44,7 +47,7 @@ impl Kernel {
             view_formats: &[TextureFormat::Rgba32Float],
         });
 
-        gpu.queue.write_texture(
+        gpu.render_state.queue.write_texture(
             ImageCopyTexture {
                 texture: &texture,
                 mip_level: 0,
@@ -77,7 +80,7 @@ impl Kernel {
 
         #[cfg(debug_assertions)]
         print!("Creating input texture...\n");
-        let input_texture = gpu.device.create_texture(&TextureDescriptor {
+        let input_texture = gpu.render_state.device.create_texture(&TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: width,
@@ -97,7 +100,7 @@ impl Kernel {
 
         #[cfg(debug_assertions)]
         print!("Writing input texture...\n");
-        gpu.queue.write_texture(
+        gpu.render_state.queue.write_texture(
             ImageCopyTexture {
                 texture: &input_texture,
                 mip_level: 0,
@@ -119,7 +122,7 @@ impl Kernel {
 
         #[cfg(debug_assertions)]
         print!("Creating output texture...\n");
-        let output_texture = gpu.device.create_texture(&TextureDescriptor {
+        let output_texture = gpu.render_state.device.create_texture(&TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: pad_to_multiple_of_256(width),
@@ -155,94 +158,101 @@ impl Kernel {
     ) {
         #[cfg(debug_assertions)]
         print!("Applying kernel...\n");
-        let bind_group_layout = gpu
+        let bind_group_layout =
+            gpu.render_state
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::COMPUTE,
+                            ty: BindingType::StorageTexture {
+                                access: StorageTextureAccess::ReadOnly,
+                                format: TextureFormat::Rgba8Unorm,
+                                view_dimension: TextureViewDimension::D2,
+                            },
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::COMPUTE,
+                            ty: BindingType::StorageTexture {
+                                access: StorageTextureAccess::ReadOnly,
+                                format: TextureFormat::Rgba32Float,
+                                view_dimension: TextureViewDimension::D2,
+                            },
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: ShaderStages::COMPUTE,
+                            ty: BindingType::StorageTexture {
+                                access: StorageTextureAccess::WriteOnly,
+                                format: TextureFormat::Rgba8Unorm,
+                                view_dimension: TextureViewDimension::D2,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+
+        let pipeline_layout =
+            gpu.render_state
+                .device
+                .create_pipeline_layout(&PipelineLayoutDescriptor {
+                    label: None,
+                    bind_group_layouts: &[&bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
+        #[cfg(debug_assertions)]
+        assert!(gpu.shaders.contains_key("filters/kernel"));
+
+        let kernel_shader = gpu.shaders.get("filters/kernel").unwrap();
+
+        let pipeline =
+            gpu.render_state
+                .device
+                .create_compute_pipeline(&ComputePipelineDescriptor {
+                    label: None,
+                    layout: Some(&pipeline_layout),
+                    module: kernel_shader,
+                    entry_point: "main",
+                    compilation_options: Default::default(),
+                    cache: None,
+                });
+
+        let bind_group = gpu
+            .render_state
             .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
+            .create_bind_group(&BindGroupDescriptor {
                 label: None,
+                layout: &bind_group_layout,
                 entries: &[
-                    BindGroupLayoutEntry {
+                    BindGroupEntry {
                         binding: 0,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadOnly,
-                            format: TextureFormat::Rgba8Unorm,
-                            view_dimension: TextureViewDimension::D2,
-                        },
-                        count: None,
+                        resource: BindingResource::TextureView(
+                            &input_texture.create_view(&TextureViewDescriptor::default()),
+                        ),
                     },
-                    BindGroupLayoutEntry {
+                    BindGroupEntry {
                         binding: 1,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::ReadOnly,
-                            format: TextureFormat::Rgba32Float,
-                            view_dimension: TextureViewDimension::D2,
-                        },
-                        count: None,
+                        resource: BindingResource::TextureView(
+                            &self.0.create_view(&TextureViewDescriptor::default()),
+                        ),
                     },
-                    BindGroupLayoutEntry {
+                    BindGroupEntry {
                         binding: 2,
-                        visibility: ShaderStages::COMPUTE,
-                        ty: BindingType::StorageTexture {
-                            access: StorageTextureAccess::WriteOnly,
-                            format: TextureFormat::Rgba8Unorm,
-                            view_dimension: TextureViewDimension::D2,
-                        },
-                        count: None,
+                        resource: BindingResource::TextureView(
+                            &output_texture.create_view(&TextureViewDescriptor::default()),
+                        ),
                     },
                 ],
             });
 
-        let pipeline_layout = gpu
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: None,
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            });
-
-        #[cfg(debug_assertions)]
-        assert!(gpu.kernel_shader.is_some());
-
-        let kernel_shader = gpu.kernel_shader.as_ref().unwrap();
-
-        let pipeline = gpu
-            .device
-            .create_compute_pipeline(&ComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: kernel_shader,
-                entry_point: "main",
-                compilation_options: Default::default(),
-                cache: None,
-            });
-
-        let bind_group = gpu.device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(
-                        &input_texture.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(
-                        &self.0.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(
-                        &output_texture.create_view(&TextureViewDescriptor::default()),
-                    ),
-                },
-            ],
-        });
-
         let mut encoder = gpu
+            .render_state
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
@@ -265,7 +275,9 @@ impl Kernel {
 
         #[cfg(debug_assertions)]
         print!("Submitting work...\n");
-        gpu.queue.submit(std::iter::once(encoder.finish()));
+        gpu.render_state
+            .queue
+            .submit(std::iter::once(encoder.finish()));
     }
 
     pub fn gaussian_kernel<const I: usize, const J: usize>(gpu: &GpuDevice) -> Self
