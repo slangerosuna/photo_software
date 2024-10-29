@@ -34,7 +34,7 @@ We welcome contributions from the community! To report bugs, request features, o
 
 ## License
 
-Photo Software is licensed under the GPL. See the [LICENSE](https://github.com/slangerosuna/photo_software/blob/main/LICENSE) file for more details.
+Photo Software is licensed under the GPL. See the [LICENSE](https://github.com/slangerosuna/photo_software/blob/master/LICENSE) file for more details.
 
 ## Contact
 
