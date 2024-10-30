@@ -4,7 +4,7 @@ Joyful Create is planned to be an advanced image editing application written in 
 
 ## Planned Features
 
-- **Basic Editing**: Crop, resize, and rotate images with precision.
+- **Basic Editing**: Crop and transform images.
 - **Advanced Effects**: Apply blurring, smudging, and a variety of filters to enhance your images.
 - **Layer Management**: Create, manage, and blend layers with multiple options for complex compositions.
 - **Drawing Tools**: Utilize splines, various brush tools, and customizable settings for detailed artwork.
@@ -22,7 +22,7 @@ cargo install joyful_create
 
 ### Pre-built Binaries
 
-You will also be able to download the latest release from the [GitHub Releases](https://github.com/slangerosuna/photo_software/releases) page and follow the installation instructions provided.
+You will also be able to download the latest release from the [GitHub Releases](https://github.com/slangerosuna/photo_software/releases) page and follow the installation instructions provided. Although none are released yet.
 
 ## Usage
 
@@ -30,11 +30,11 @@ Detailed usage instructions will be provided as the software evolves. Stay tuned
 
 ## Contribution
 
-We welcome contributions from the community! To report bugs, request features, or submit pull requests, please visit our [GitHub Issues](https://github.com/slangerosuna/photo_software/issues) page.
+If you would like to contribute, I would be incredibly grateful. Pull requests are welcome. To report bugs or request features, please visit our [GitHub Issues](https://github.com/slangerosuna/photo_software/issues) page.
 
 ## License
 
-Photo Software is licensed under the GPL. See the [LICENSE](https://github.com/slangerosuna/photo_software/blob/master/LICENSE) file for more details.
+Joyful Create is licensed under the GPL. See the [LICENSE](https://github.com/slangerosuna/photo_software/blob/master/LICENSE) file for more details.
 
 ## Contact
 
