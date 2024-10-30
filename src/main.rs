@@ -5,7 +5,13 @@
 #![feature(iter_intersperse)]
 #![feature(vec_into_raw_parts)]
 
-pub mod kernel;
+pub mod app;
+pub mod device;
+pub mod filters;
+
+use app::*;
+use device::*;
+use wgpu::*;
 mod workspace;
 
 use std::{
@@ -16,10 +22,12 @@ use std::{
 };
 
 use eframe::egui;
-use egui::{load::SizedTexture, panel, Image, Layout, Pos2, Rect, Sense, TextureId, Vec2};
+use egui::{
+    load::SizedTexture, panel, Image, Layout, Pos2, Rect, Sense, TextureId, TopBottomPanel, Vec2,
+};
 use egui_wgpu::{RenderState, WgpuConfiguration};
 use tokio::runtime::Runtime;
-use workspace::{LayerCreationInfo, Workspace};
+use workspace::{layer_info::LayerCreationInfo, tools::ActionOrigin, Workspace};
 
 fn main() -> eframe::Result {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -74,235 +82,4 @@ fn main() -> eframe::Result {
     )?;
 
     Ok(())
-}
-
-pub struct App {
-    gpu: GpuDevice,
-    runtime: Arc<Runtime>,
-    output_tex: TextureId,
-    workspace: Workspace,
-    prev_mouse_pos: Pos2,
-    mouse_down: bool,
-}
-
-impl App {
-    pub fn new(
-        gpu: GpuDevice,
-        runtime: Arc<Runtime>,
-        output_tex: TextureId,
-        workspace: Workspace,
-    ) -> Self {
-        Self {
-            gpu,
-            runtime,
-            output_tex,
-            workspace,
-            prev_mouse_pos: Pos2::new(0.0, 0.0),
-            mouse_down: false,
-        }
-    }
-}
-
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::SidePanel::left("left_panel").show(ctx, |ui| {
-            ui.heading("Left Panel");
-            ui.label("This is a simple egui app.");
-        });
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.input(|reader| {
-                for event in reader.events.iter() {
-                    match event {
-                        egui::Event::PointerMoved(pos) => {
-                            if self.mouse_down {
-                                let delta = *pos - self.prev_mouse_pos;
-                                self.workspace.pixel_at_center = (
-                                    self.workspace.pixel_at_center.0 - (delta.x / self.workspace.zoom),
-                                    self.workspace.pixel_at_center.1 - (delta.y / self.workspace.zoom),
-                                );
-                            }
-                            self.prev_mouse_pos = *pos;
-                        }
-                        egui::Event::MouseWheel { unit, delta, modifiers } => {
-                            let zoom = self.workspace.zoom;
-                            match delta {
-                                egui::Vec2 { x, y } => {
-                                    let zoom_factor = 1.1;
-                                    if *y > 0.0 {
-                                        self.workspace.zoom = zoom * zoom_factor;
-                                    } else {
-                                        self.workspace.zoom = zoom / zoom_factor;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        egui::Event::PointerButton {
-                            pos,
-                            button,
-                            pressed,
-                            modifiers,
-                        } => {
-                            if button == &egui::PointerButton::Secondary {
-                                if *pressed {
-                                    self.mouse_down = true;
-                                } else {
-                                    self.mouse_down = false;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            });
-            let size: (u32, u32) = self.workspace.size;
-            let zoom: f32 = self.workspace.zoom;
-            let size: Vec2 = Vec2::new(size.0 as f32 * zoom, size.1 as f32 * zoom);
-
-            let pixel_at_center: (f32, f32) = self.workspace.pixel_at_center;
-            let pixel_at_center: Vec2 =
-                Vec2::new(pixel_at_center.0 as f32, pixel_at_center.1 as f32);
-            let center: Vec2 = pixel_at_center * zoom;
-
-            let image = Image::new((self.output_tex, size));
-
-            let panel_rect = ui.min_rect();
-            let panel_center = panel_rect.center();
-
-            let top_left = panel_center - center;
-            let bottom_right = top_left + size;
-
-            let image_rect = Rect::from_min_max(top_left, bottom_right);
-
-            let image = image.sense(Sense::click());
-            ui.put(image_rect, image);
-        });
-    }
-}
-
-use image::{GenericImageView, ImageBuffer, Rgba};
-use wgpu::*;
-
-pub struct GpuDevice {
-    pub render_state: RenderState,
-    pub shaders: HashMap<String, ShaderModule>,
-}
-
-#[inline]
-pub fn pad_to_multiple_of_256(n: u32) -> u32 {
-    (n + 255) & !255
-}
-
-fn gather_all_files(root: PathBuf) -> Vec<PathBuf> {
-    let read_dir = std::fs::read_dir(root).unwrap();
-    let mut files = Vec::new();
-
-    for entry in read_dir {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_dir() {
-            files.extend(gather_all_files(path));
-        } else {
-            files.push(path);
-        }
-    }
-
-    files
-}
-
-impl GpuDevice {
-    pub async fn new(render_state: RenderState) -> Option<Self> {
-        let mut shaders = HashMap::new();
-        let files = gather_all_files(PathBuf::from("./shaders"));
-        for file in files {
-            let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
-            if file_extension == "wgsl" {
-                let module = render_state
-                    .device
-                    .create_shader_module(ShaderModuleDescriptor {
-                        label: None,
-                        source: ShaderSource::Wgsl(
-                            std::fs::read_to_string(file.clone()).unwrap().into(),
-                        ),
-                    });
-                let relative_file = file
-                    .strip_prefix("./shaders")
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .split('.')
-                    .next()
-                    .unwrap()
-                    .to_string();
-                #[cfg(debug_assertions)]
-                print!("Loaded shader: {}\n", relative_file);
-                shaders.insert(relative_file, module);
-            }
-        }
-
-        Some(Self {
-            render_state,
-            shaders,
-        })
-    }
-
-    pub async fn texture_to_image(
-        &self,
-        texture: &Texture,
-        width: u32,
-    ) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-        let size = texture.size();
-        #[cfg(debug_assertions)]
-        print!(
-            "Converting texture to image with size {}x{}...\n",
-            width, size.height
-        );
-        let buffer_size = (size.width * size.height * 4) as u64;
-        let buffer_desc = BufferDescriptor {
-            label: None,
-            size: buffer_size,
-            usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        };
-        let buffer = self.render_state.device.create_buffer(&buffer_desc);
-
-        let mut encoder = self
-            .render_state
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
-        encoder.copy_texture_to_buffer(
-            ImageCopyTexture {
-                texture: &texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            ImageCopyBuffer {
-                buffer: &buffer,
-                layout: ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(pad_to_multiple_of_256(4 * size.width)),
-                    rows_per_image: Some(size.height),
-                },
-            },
-            size,
-        );
-
-        self.render_state.queue.submit(Some(encoder.finish()));
-        let buffer_slice = buffer.slice(..);
-
-        buffer_slice.map_async(MapMode::Read, |result| {
-            if let Err(e) = result {
-                eprintln!("Failed to map buffer: {:?}", e);
-                return;
-            }
-        });
-        self.render_state.device.poll(Maintain::Wait);
-
-        let data = buffer_slice.get_mapped_range();
-
-        let image = ImageBuffer::from_raw(size.width, size.height, data.to_vec()).unwrap();
-        //crop off the padding
-        image.view(0, 0, width, size.height).to_image()
-    }
 }

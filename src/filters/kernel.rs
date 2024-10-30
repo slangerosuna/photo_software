@@ -1,4 +1,4 @@
-use crate::{pad_to_multiple_of_256, GpuDevice};
+use crate::device::{pad_to_multiple_of_256, GpuDevice};
 
 use image::{ImageBuffer, Rgba};
 use wgpu::*;
