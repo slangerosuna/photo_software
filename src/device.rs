@@ -34,7 +34,13 @@ fn gather_all_files(root: PathBuf) -> Vec<PathBuf> {
 impl GpuDevice {
     pub async fn new(render_state: RenderState) -> Option<Self> {
         let mut shaders = HashMap::new();
-        let files = gather_all_files(PathBuf::from("./shaders"));
+
+        let shaders_dir = std::env::current_exe().expect("Can't find path to executable");
+        let shaders_dir = format!("{}/shaders", shaders_dir.parent().unwrap().display());
+        let files = gather_all_files(PathBuf::from(&shaders_dir));
+
+        println!("Files: {:?}", files);
+
         for file in files {
             let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
             if file_extension == "wgsl" {
@@ -46,15 +52,17 @@ impl GpuDevice {
                             std::fs::read_to_string(file.clone()).unwrap().into(),
                         ),
                     });
+
                 let relative_file = file
-                    .strip_prefix("./shaders")
+                    .strip_prefix(&shaders_dir)
                     .unwrap()
                     .to_str()
                     .unwrap()
-                    .split('.')
-                    .next()
+                    .to_string()
+                    .strip_suffix(".wgsl")
                     .unwrap()
                     .to_string();
+
                 #[cfg(debug_assertions)]
                 print!("Loaded shader: {}\n", relative_file);
                 shaders.insert(relative_file, module);
