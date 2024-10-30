@@ -4,7 +4,9 @@ fn main() {
     println!("cargo:rerun-if-changed=shaders");
     println!("cargo:rerun-if-changed=build.rs");
 
+    let base_target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or(".".to_string());
     let target_dir = std::env::var("CARGO_BUILD_TARGET_DIR").unwrap_or("target".to_string());
+    let target_dir = format!("{}/{}", base_target_dir, target_dir);
     let profile = std::env::var("PROFILE").unwrap_or("debug".to_string());
     let target_dir = format!("{}/{}", target_dir, profile);
     let target_dir = format!("{}/shaders", target_dir);
