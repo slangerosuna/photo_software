@@ -36,7 +36,7 @@ impl GpuDevice {
         let mut shaders = HashMap::new();
 
         let shaders_dir = std::env::current_exe().expect("Can't find path to executable");
-        let shaders_dir = format!("{}/shaders", shaders_dir.parent().unwrap().display());
+        let shaders_dir = format!("{}/joyful_create_shaders", shaders_dir.parent().unwrap().display());
         let files = gather_all_files(PathBuf::from(&shaders_dir));
 
         println!("Files: {:?}", files);

@@ -1,6 +1,6 @@
 [package]
 name = "joyful_create"
-version = "0.0.1.0"
+version = "0.0.2"
 edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Photo editing software. Designed to function like GIMP or PhotoShop, although still indev"

@@ -5,7 +5,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let base_target_dir = std::env::var("CARGO_HOME").unwrap();
-    let target_dir = format!("{}/bin", base_target_dir);
+    let target_dir = format!("{}/bin/joyful_create_shaders", base_target_dir);
     let target_dir = Path::new(target_dir.as_str());
 
     if target_dir.exists() {

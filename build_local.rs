@@ -9,7 +9,7 @@ fn main() {
     let target_dir = format!("{}/{}", base_target_dir, target_dir);
     let profile = std::env::var("PROFILE").unwrap_or("debug".to_string());
     let target_dir = format!("{}/{}", target_dir, profile);
-    let target_dir = format!("{}/shaders", target_dir);
+    let target_dir = format!("{}/joyful_create_shaders", target_dir);
     let target_dir = Path::new(target_dir.as_str());
 
     if target_dir.exists() {
