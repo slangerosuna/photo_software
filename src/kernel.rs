@@ -10,9 +10,7 @@ impl GpuDevice {
             .device
             .create_shader_module(ShaderModuleDescriptor {
                 label: None,
-                source: ShaderSource::Wgsl(
-                    std::fs::read_to_string("filters/kernel")?.into(),
-                ),
+                source: ShaderSource::Wgsl(std::fs::read_to_string("filters/kernel")?.into()),
             });
 
         Ok(kernel_shader)

@@ -3,6 +3,7 @@
 #![feature(generic_const_exprs)]
 #![feature(iter_next_chunk)]
 #![feature(iter_intersperse)]
+#![feature(vec_into_raw_parts)]
 
 pub mod kernel;
 mod workspace;
@@ -10,9 +11,10 @@ mod workspace;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use eframe::egui;
+use egui::{load::SizedTexture, panel, Image, Layout, Pos2, Rect, Sense, TextureId, Vec2};
 use egui_wgpu::{RenderState, WgpuConfiguration};
 use tokio::runtime::Runtime;
-use workspace::Workspace;
+use workspace::{LayerCreationInfo, Workspace};
 
 fn main() -> eframe::Result {
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -39,12 +41,28 @@ fn main() -> eframe::Result {
     };
 
     eframe::run_native(
-        "BPics",
+        "Joyful Create",
         options,
         Box::new(|cc| {
             let render_state = cc.wgpu_render_state.clone().unwrap();
             let gpu = rt_arc.block_on(GpuDevice::new(render_state)).unwrap();
-            let app = App::new(gpu, rt_arc.clone());
+
+            let mut workspace = Workspace {
+                ..Default::default()
+            };
+            workspace.create_layer(
+                LayerCreationInfo {
+                    name: "Background".to_string(),
+                    init_image: Some(image::open("other.png").unwrap().to_rgba8()),
+                    ..Default::default()
+                },
+                &gpu,
+                None,
+            );
+            workspace.build_output_texture(&gpu);
+
+            let output_tex = workspace.register_output_texture(cc);
+            let app = App::new(gpu, rt_arc.clone(), output_tex, workspace);
 
             Ok(Box::new(app))
         }),
@@ -56,15 +74,22 @@ fn main() -> eframe::Result {
 pub struct App {
     gpu: GpuDevice,
     runtime: Arc<Runtime>,
+    output_tex: TextureId,
     workspace: Workspace,
 }
 
 impl App {
-    pub fn new(gpu: GpuDevice, runtime: Arc<Runtime>) -> Self {
+    pub fn new(
+        gpu: GpuDevice,
+        runtime: Arc<Runtime>,
+        output_tex: TextureId,
+        workspace: Workspace,
+    ) -> Self {
         Self {
             gpu,
             runtime,
-            workspace: Workspace::default(),
+            output_tex,
+            workspace,
         }
     }
 }
@@ -75,7 +100,42 @@ impl eframe::App for App {
             ui.heading("Left Panel");
             ui.label("This is a simple egui app.");
         });
-        egui::CentralPanel::default().show(ctx, |ui| {});
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let size: (u32, u32) = self.workspace.size;
+            let zoom: f32 = self.workspace.zoom;
+            let size: Vec2 = Vec2::new(size.0 as f32 * zoom, size.1 as f32 * zoom);
+
+            let pixel_at_center: (f32, f32) = self.workspace.pixel_at_center;
+            let pixel_at_center: Vec2 =
+                Vec2::new(pixel_at_center.0 as f32, pixel_at_center.1 as f32);
+            let center: Vec2 = pixel_at_center * zoom;
+
+            let image = Image::new((self.output_tex, size));
+
+            let panel_rect = ui.min_rect();
+            let panel_center = panel_rect.center();
+
+            let top_left = panel_center - center;
+            let bottom_right = top_left + size;
+
+            let image_rect = Rect::from_min_max(top_left, bottom_right);
+
+            let image = image.sense(Sense::click());
+            if ui.put(image_rect, image).clicked() {
+                let image = image::open("input.png").unwrap().to_rgba8();
+                self.workspace.create_layer(
+                    LayerCreationInfo {
+                        init_image: Some(image),
+                        blend_mode: "normal".to_string(),
+                        opacity: 0.5,
+                        ..Default::default()
+                    },
+                    &self.gpu,
+                    None,
+                );
+                self.workspace.recalculate_output_texture(&self.gpu);
+            }
+        });
     }
 }
 
