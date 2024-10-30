@@ -1,7 +1,10 @@
 [package]
 name = "joyful_create"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
+license-file = "LICENSE"
+license = "GPL-3.0-or-later"
+description = "Photo editing software. Designed to function like GIMP or PhotoShop, although still indev"
 
 [dependencies]
 image = { version = "0.25.4", default-features = false, features = ["jpeg", "png"] }
