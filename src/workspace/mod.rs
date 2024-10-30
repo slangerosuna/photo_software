@@ -415,7 +415,13 @@ impl Workspace {
                                 ty: BindingType::Buffer {
                                     ty: BufferBindingType::Uniform,
                                     has_dynamic_offset: false,
-                                    min_binding_size: Some(std::num::NonZeroU64::new(std::mem::size_of::<f32>() as u64).unwrap()),
+                                    min_binding_size:
+                                        Some(
+                                            std::num::NonZeroU64::new(
+                                                std::mem::size_of::<f32>() as u64
+                                            )
+                                            .unwrap(),
+                                        ),
                                 },
                                 count: None,
                             },
@@ -515,7 +521,7 @@ impl Workspace {
             .create_view(&TextureViewDescriptor::default());
         let mut renderer = renderer.write();
         let id =
-            renderer.register_native_texture(device.borrow(), &texture_view, FilterMode::Linear);
+            renderer.register_native_texture(device.borrow(), &texture_view, FilterMode::Nearest);
         drop(renderer);
         id
     }

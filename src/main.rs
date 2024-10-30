@@ -8,7 +8,12 @@
 pub mod kernel;
 mod workspace;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use eframe::egui;
 use egui::{load::SizedTexture, panel, Image, Layout, Pos2, Rect, Sense, TextureId, Vec2};
@@ -76,6 +81,8 @@ pub struct App {
     runtime: Arc<Runtime>,
     output_tex: TextureId,
     workspace: Workspace,
+    prev_mouse_pos: Pos2,
+    mouse_down: bool,
 }
 
 impl App {
@@ -90,6 +97,8 @@ impl App {
             runtime,
             output_tex,
             workspace,
+            prev_mouse_pos: Pos2::new(0.0, 0.0),
+            mouse_down: false,
         }
     }
 }
@@ -101,6 +110,51 @@ impl eframe::App for App {
             ui.label("This is a simple egui app.");
         });
         egui::CentralPanel::default().show(ctx, |ui| {
+            ui.input(|reader| {
+                for event in reader.events.iter() {
+                    match event {
+                        egui::Event::PointerMoved(pos) => {
+                            if self.mouse_down {
+                                let delta = *pos - self.prev_mouse_pos;
+                                self.workspace.pixel_at_center = (
+                                    self.workspace.pixel_at_center.0 - (delta.x / self.workspace.zoom),
+                                    self.workspace.pixel_at_center.1 - (delta.y / self.workspace.zoom),
+                                );
+                            }
+                            self.prev_mouse_pos = *pos;
+                        }
+                        egui::Event::MouseWheel { unit, delta, modifiers } => {
+                            let zoom = self.workspace.zoom;
+                            match delta {
+                                egui::Vec2 { x, y } => {
+                                    let zoom_factor = 1.1;
+                                    if *y > 0.0 {
+                                        self.workspace.zoom = zoom * zoom_factor;
+                                    } else {
+                                        self.workspace.zoom = zoom / zoom_factor;
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        egui::Event::PointerButton {
+                            pos,
+                            button,
+                            pressed,
+                            modifiers,
+                        } => {
+                            if button == &egui::PointerButton::Secondary {
+                                if *pressed {
+                                    self.mouse_down = true;
+                                } else {
+                                    self.mouse_down = false;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            });
             let size: (u32, u32) = self.workspace.size;
             let zoom: f32 = self.workspace.zoom;
             let size: Vec2 = Vec2::new(size.0 as f32 * zoom, size.1 as f32 * zoom);
@@ -121,20 +175,7 @@ impl eframe::App for App {
             let image_rect = Rect::from_min_max(top_left, bottom_right);
 
             let image = image.sense(Sense::click());
-            if ui.put(image_rect, image).clicked() {
-                let image = image::open("input.png").unwrap().to_rgba8();
-                self.workspace.create_layer(
-                    LayerCreationInfo {
-                        init_image: Some(image),
-                        blend_mode: "normal".to_string(),
-                        opacity: 0.5,
-                        ..Default::default()
-                    },
-                    &self.gpu,
-                    None,
-                );
-                self.workspace.recalculate_output_texture(&self.gpu);
-            }
+            ui.put(image_rect, image);
         });
     }
 }
