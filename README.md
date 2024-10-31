@@ -1,20 +1,10 @@
 # Joyful Create
 
-Joyful Create is planned to be an advanced image editing application written in Rust. It aims to provide a robust set of features for professional and amateur artists, comparable to industry-standard tools like Photoshop and GIMP. The name for the project comes from my lovel partner, Myitta, who requested I credit them for this.
-
-## Planned Features
-
-- **Basic Editing**: Crop and transform images.
-- **Advanced Effects**: Apply blurring, smudging, and a variety of filters to enhance your images.
-- **Layer Management**: Create, manage, and blend layers with multiple options for complex compositions.
-- **Drawing Tools**: Utilize splines, various brush tools, and customizable settings for detailed artwork.
-- **Color Adjustments**: Fine-tune color balance, brightness, contrast, and other color properties.
+Joyful Create is planned to be an advanced image editing application written in Rust. It is essentially my attempt to make a Rust clone of PhotoShop, Paint.NET, or GIMP, primarily in order to learn. The name for the project comes from my lovely partner, Myitta, who requested I credit them for this.
 
 ## Installation
 
-You will be able to install Joyful Create using Cargo or by downloading pre-built binaries from our GitHub repository.
-
-### Using Cargo
+Joyful Create is on [crates.io](https://crates.io/joyful_create), so it can be installed with Cargo
 
 ```sh
 cargo install joyful_create
