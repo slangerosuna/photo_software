@@ -42,8 +42,6 @@ impl GpuDevice {
         );
         let files = gather_all_files(PathBuf::from(&shaders_dir));
 
-        println!("Files: {:?}", files);
-
         for file in files {
             let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
             if file_extension == "wgsl" {
