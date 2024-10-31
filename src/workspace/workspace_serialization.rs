@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use image::{ImageFormat, ImageReader};
+use image::{ImageEncoder, ImageFormat, ImageReader};
 use wgpu::*;
 
 use super::Workspace;
@@ -8,8 +8,11 @@ use crate::device::{pad_to_multiple_of_256, GpuDevice};
 
 impl Workspace<'_> {
     pub fn load(path: &str, gpu: &GpuDevice) -> Result<Self, Box<dyn std::error::Error>> {
+        #[cfg(debug_assertions)]
+        println!("Loading workspace at {}...", path);
+
         let data = std::fs::read(path)?;
-        let bincode_end = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+        let bincode_end = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize + 4;
         let mut this: Self = bincode::deserialize(&data[4..bincode_end])?;
 
         let data = &data[bincode_end..];
@@ -30,6 +33,7 @@ impl Workspace<'_> {
             let reader = ImageReader::with_format(reader, ImageFormat::Png);
 
             let image = reader.decode()?.into_rgba8();
+            println!("c");
             let width = image.width();
             let height = image.height();
 
@@ -74,6 +78,8 @@ impl Workspace<'_> {
                     depth_or_array_layers: 1,
                 },
             );
+
+            this.textures.push(input_texture);
         }
 
         this.build_output_texture(gpu);
@@ -81,74 +87,48 @@ impl Workspace<'_> {
         Ok(this)
     }
 
-    fn save(&self, path: &str, gpu: &GpuDevice) {
+    pub async fn save(&self, path: &str, gpu: &GpuDevice) {
+        #[cfg(debug_assertions)]
+        println!("Saving workspace at {}...", path);
+
         let mut data = bincode::serialize(&self).unwrap();
+        let len = data.len() as u32;
+        let len_bytes = len.to_le_bytes();
+        let mut data = len_bytes
+            .iter()
+            .copied()
+            .chain(data.into_iter())
+            .collect::<Vec<u8>>();
         let mut images = Vec::new();
 
         for texture in &self.textures {
-            let size = self.size;
-            let size: Extent3d = Extent3d {
-                width: size.0,
-                height: size.1,
-                depth_or_array_layers: 1,
-            };
-            let buffer_size = (size.width * size.height * 4) as u64;
-            let buffer_desc = BufferDescriptor {
-                label: None,
-                size: buffer_size,
-                usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            };
-            let buffer = gpu.render_state.device.create_buffer(&buffer_desc);
+            let image = gpu.texture_to_image(texture, self.size.0).await;
 
-            let mut encoder = gpu
-                .render_state
-                .device
-                .create_command_encoder(&CommandEncoderDescriptor { label: None });
-            encoder.copy_texture_to_buffer(
-                ImageCopyTexture {
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: Origin3d::ZERO,
-                    aspect: TextureAspect::All,
-                },
-                ImageCopyBuffer {
-                    buffer: &buffer,
-                    layout: ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(pad_to_multiple_of_256(4 * size.width)),
-                        rows_per_image: Some(size.height),
-                    },
-                },
-                size,
+            let mut data = Vec::new();
+            let encoder = image::codecs::png::PngEncoder::new_with_quality(
+                &mut data,
+                image::codecs::png::CompressionType::Best,
+                image::codecs::png::FilterType::NoFilter,
             );
 
-            gpu.render_state.queue.submit(Some(encoder.finish()));
-            let buffer_slice = buffer.slice(..);
-
-            buffer_slice.map_async(MapMode::Read, |result| {
-                if let Err(e) = result {
-                    eprintln!("Failed to map buffer: {:?}", e);
-                    return;
-                }
-            });
-            gpu.render_state.device.poll(Maintain::Wait);
-
-            let data = buffer_slice.get_mapped_range();
+            encoder
+                .write_image(
+                    &image.into_vec(),
+                    self.size.0,
+                    self.size.1,
+                    image::ExtendedColorType::Rgba8,
+                )
+                .unwrap();
 
             images.push(data.to_vec());
         }
 
         for image in images {
-            let len = image.len();
+            let len = image.len() as u32;
             let len = len.to_le_bytes();
             data.extend_from_slice(&len);
             data.extend_from_slice(&image);
         }
-
-        let len = data.len();
-        let len = len.to_le_bytes();
-        data.splice(0..0, len.iter().copied());
 
         std::fs::write(path, data).unwrap();
     }

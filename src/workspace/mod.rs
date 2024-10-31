@@ -12,6 +12,7 @@ pub mod workspace_serialization;
 
 use layer_info::*;
 use tools::*;
+pub use workspace_serialization::*;
 
 use crate::GpuDevice;
 
@@ -92,7 +93,8 @@ impl Workspace<'_> {
                 usage: TextureUsages::RENDER_ATTACHMENT
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::COPY_DST
-                    | TextureUsages::STORAGE_BINDING,
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::COPY_SRC,
                 view_formats: &[TextureFormat::Rgba8Unorm],
             });
 

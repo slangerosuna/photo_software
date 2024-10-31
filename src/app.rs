@@ -124,6 +124,22 @@ impl eframe::App for App<'_> {
                             }
                             _ => {}
                         },
+                        egui::Event::Key {
+                            key,
+                            physical_key,
+                            pressed,
+                            repeat,
+                            modifiers,
+                        } => match key {
+                            egui::Key::F5 => {
+                                if !*pressed {
+                                    continue;
+        }
+                                self.runtime
+                                    .block_on(self.workspace.save("saved.jc", &self.gpu));
+                            }
+                            _ => {}
+                        },
                         _ => {}
                     }
                 }

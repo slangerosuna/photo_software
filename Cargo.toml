@@ -5,7 +5,7 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 description = "Photo editing software. Designed to function like GIMP or PhotoShop, although still indev"
 # build_local.rs on `cargo r` or `cargo b`, build_install.rs on `cargo install`
-build = "build_install.rs"
+build = "build_local.rs"
 
 [dependencies]
 image = { version = "0.25.4", default-features = false, features = ["jpeg", "png"] }

@@ -19,6 +19,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Instant,
+    vec,
 };
 
 use eframe::egui;
@@ -30,6 +31,40 @@ use tokio::runtime::Runtime;
 use workspace::{layer_info::LayerCreationInfo, tools::ActionOrigin, Workspace};
 
 fn main() -> eframe::Result {
+    let args = std::env::args().collect::<Vec<String>>();
+    let file_to_load = match args.len() {
+        1 => None,
+        2 => {
+            if args[1] == "--help" {
+                println!("Usage: joyful_create [file]");
+                return Ok(());
+            }
+
+            let file_to_load = PathBuf::from(args[1].clone());
+            if !file_to_load.exists() {
+                println!("File not found: {}", file_to_load.display());
+                return Ok(());
+            }
+            if !file_to_load.is_file() {
+                println!("Not a file: {}", file_to_load.display());
+                return Ok(());
+            }
+            if file_to_load.extension().unwrap() != "jc" {
+                println!("Invalid file extension: {}", file_to_load.display());
+                println!("Only .jc files are supported.");
+                return Ok(());
+            }
+
+            Some(file_to_load)
+        }
+        _ => {
+            println!("Too many arguments provided.");
+            println!("Usage: joyful_create [file]");
+
+            return Ok(());
+        }
+    };
+
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(8)
         .enable_all()
@@ -60,19 +95,23 @@ fn main() -> eframe::Result {
             let render_state = cc.wgpu_render_state.clone().unwrap();
             let gpu = rt_arc.block_on(GpuDevice::new(render_state)).unwrap();
 
-            let mut workspace = Workspace {
-                ..Default::default()
+            let workspace = match file_to_load {
+                None => {
+                    let mut workspace = Workspace::default();
+                    workspace.create_layer(
+                        LayerCreationInfo {
+                            name: "Background".to_string(),
+                            init_rgba: Some([255, 255, 255, 255]),
+                            ..Default::default()
+                        },
+                        &gpu,
+                        None,
+                    );
+                    workspace.build_output_texture(&gpu);
+                    workspace
+                }
+                Some(path) => Workspace::load("saved.jc", &gpu).expect("Failed to load workspace"),
             };
-            workspace.create_layer(
-                LayerCreationInfo {
-                    name: "Background".to_string(),
-                    init_image: Some(image::open("other.png").unwrap().to_rgba8()),
-                    ..Default::default()
-                },
-                &gpu,
-                None,
-            );
-            workspace.build_output_texture(&gpu);
 
             let output_tex = workspace.register_output_texture(cc);
             let app = App::new(gpu, rt_arc.clone(), output_tex, workspace);
