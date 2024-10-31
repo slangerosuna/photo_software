@@ -1,6 +1,6 @@
 # Joyful Create
 
-Joyful Create is planned to be an advanced image editing application written in Rust. It aims to provide a robust set of features for professional and amateur artists, comparable to industry-standard tools like Photoshop and GIMP.
+Joyful Create is planned to be an advanced image editing application written in Rust. It aims to provide a robust set of features for professional and amateur artists, comparable to industry-standard tools like Photoshop and GIMP. The name for the project comes from my lovel partner, Myitta, who requested I credit them for this.
 
 ## Planned Features
 
@@ -19,10 +19,6 @@ You will be able to install Joyful Create using Cargo or by downloading pre-buil
 ```sh
 cargo install joyful_create
 ```
-
-### Pre-built Binaries
-
-You will also be able to download the latest release from the [GitHub Releases](https://github.com/slangerosuna/photo_software/releases) page and follow the installation instructions provided. Although none are released yet.
 
 ## Usage
 
