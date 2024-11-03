@@ -22,7 +22,7 @@ fn gather_all_files(root: PathBuf) -> Vec<PathBuf> {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_dir() {
-            files.extend(gather_all_files(path));
+            files.extend(gather_all_files(path.clone()));
         } else {
             files.push(path);
         }

@@ -37,10 +37,12 @@ impl<'a> App<'a> {
 }
 
 impl eframe::App for App<'_> {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {        
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            ui.heading("Top Panel");
-            ui.label("This is a simple egui app.");
+            ui.horizontal(|ui| {
+                ui.label("Joyful Create");
+                ui.label("v0.1");
+            });
         });
 
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
