@@ -64,6 +64,37 @@ impl GpuDevice {
                     .unwrap()
                     .to_string();
 
+                // replace `\\` with `/` for windows`
+                let relative_file = relative_file.replace("\\", "/");
+
+                #[cfg(debug_assertions)]
+                print!("Loaded shader: {}\n", relative_file);
+                shaders.insert(relative_file, module);
+            }
+            if file_extension == "spv" {
+                let shader_data: Vec<u8> = std::fs::read(file.clone()).unwrap();
+                let source = wgpu::util::make_spirv(&shader_data);
+
+                let module = render_state
+                    .device
+                    .create_shader_module(ShaderModuleDescriptor {
+                        label: None,
+                        source,
+                    });
+
+                let relative_file = file
+                    .strip_prefix(&shaders_dir)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+                    .strip_suffix(".spv")
+                    .unwrap()
+                    .to_string();
+
+                // replace `\\` with `/` for windows`
+                let relative_file = relative_file.replace("\\", "/");
+
                 #[cfg(debug_assertions)]
                 print!("Loaded shader: {}\n", relative_file);
                 shaders.insert(relative_file, module);
