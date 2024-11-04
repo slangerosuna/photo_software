@@ -25,7 +25,7 @@ fn main(@builtin(global_invocation_id) GlobalInvocationId: vec3<u32>) {
         } else {
             distance = distance(brush_center, vec2<f32>(GlobalInvocationId.xy));
         }
-        let alpha = opacity * apply_hardness(1.0 - distance / brush_size, brush_hardness);
+        let alpha = opacity * apply_hardness_circle_brush(1.0 - distance / brush_size, brush_hardness);
         let cur = textureLoad(mask_texture, vec2<i32>(GlobalInvocationId.xy));
         if (alpha > cur.r) {
             textureStore(mask_texture, vec2<i32>(GlobalInvocationId.xy), vec4<f32>(alpha));
@@ -47,11 +47,16 @@ fn main(@builtin(global_invocation_id) GlobalInvocationId: vec3<u32>) {
         let sampled_opacity = textureLoad(brush_texture, vec2<i32>(brush_tex_coord_rotated));
 
         let hardened_opacity =
-            apply_hardness(sampled_opacity.r, brush_hardness) * opacity;
+            apply_hardness_texture_brush(sampled_opacity.r, brush_hardness) * opacity;
 
     }
 }
 
-fn apply_hardness(input: f32, hardness: f32) -> f32 {
-    return smoothstep(hardness, 0.0, input);
+fn apply_hardness_circle_brush(input: f32, hardness: f32) -> f32 {
+    return smoothstep(0.0, 1.0 - hardness, input);
+}
+
+fn apply_hardness_texture_brush(input: f32, hardness: f32) -> f32 {
+    let half_hardness = hardness * 0.5;
+    return smoothstep(half_hardness, 1.0 - half_hardness, input);
 }

@@ -107,7 +107,6 @@ fn main() -> eframe::Result {
                         &gpu,
                         None,
                     );
-                    workspace.build_output_texture(&gpu);
                     workspace
                 }
                 Some(path) => Workspace::load("saved.jc", &gpu).expect("Failed to load workspace"),

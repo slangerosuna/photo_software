@@ -5,6 +5,7 @@ use wgpu::*;
 
 use super::Workspace;
 use crate::device::{pad_to_multiple_of_256, GpuDevice};
+use crate::workspace::LayerData;
 
 impl Workspace<'_> {
     pub fn load(path: &str, gpu: &GpuDevice) -> Result<Self, Box<dyn std::error::Error>> {
@@ -27,9 +28,9 @@ impl Workspace<'_> {
             let len: [u8; 4] = len.unwrap();
             let len = u32::from_le_bytes(len) as usize;
 
-            let data = (&mut data).take(len).collect::<Vec<u8>>();
+            let mdata = (&mut data).take(len).collect::<Vec<u8>>();
 
-            let reader = Cursor::new(data);
+            let reader = Cursor::new(mdata);
             let reader = ImageReader::with_format(reader, ImageFormat::Png);
 
             let image = reader.decode()?.into_rgba8();
@@ -79,7 +80,89 @@ impl Workspace<'_> {
                 },
             );
 
-            this.textures.push(input_texture);
+            let mask_len: [u8; 4] = (&mut data).next_chunk::<4>().expect("layer not provided with mask");
+            let mask_len = u32::from_le_bytes(mask_len) as usize;
+
+            let mask_data = (&mut data).take(mask_len).collect::<Vec<u8>>();
+
+            let reader = Cursor::new(mask_data);
+            let reader = ImageReader::with_format(reader, ImageFormat::Png);
+
+            let mask_image = reader.decode()?.into_luma8();
+
+            let mask_width = mask_image.width();
+            let mask_height = mask_image.height();
+
+            #[cfg(debug_assertions)]
+            print!("Creating mask texture...\n");
+            let mask_texture = gpu.render_state.device.create_texture(&TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: mask_width,
+                    height: mask_height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::R8Unorm,
+                usage: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::COPY_DST,
+                view_formats: &[TextureFormat::R8Unorm],
+            });
+
+            #[cfg(debug_assertions)]
+            print!("Writing mask texture...\n");
+            gpu.render_state.queue.write_texture(
+                ImageCopyTexture {
+                    texture: &mask_texture,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                mask_image.into_vec().as_slice(),
+                ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(mask_width as u32),
+                    rows_per_image: Some(mask_height as u32),
+                },
+                Extent3d {
+                    width: mask_width,
+                    height: mask_height,
+                    depth_or_array_layers: 1,
+                },
+            );
+
+            #[cfg(debug_assertions)]
+            print!("Creating layer running total texture...\n");
+            let running_total = gpu.render_state.device.create_texture(&TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width: width,
+                    height: height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8Unorm,
+                usage: TextureUsages::TEXTURE_BINDING
+                    | TextureUsages::COPY_SRC
+                    | TextureUsages::STORAGE_BINDING
+                    | TextureUsages::COPY_DST,
+                view_formats: &[TextureFormat::Rgba8Unorm],
+            });
+
+            let layer_data = LayerData {
+                texture: input_texture,
+                mask: mask_texture,
+                running_total: running_total,
+            };
+            let layer_data = Box::new(layer_data);
+
+            this.layer_data.push(layer_data);
         }
 
         this.build_output_texture(gpu);
@@ -101,17 +184,18 @@ impl Workspace<'_> {
             .collect::<Vec<u8>>();
         let mut images = Vec::new();
 
-        for texture in &self.textures {
-            let image = gpu.texture_to_image(texture, self.size.0).await;
+        for layer in self.layer_data.iter() {
+            {
+                let image = gpu.texture_to_image(&layer.texture, self.size.0).await;
 
-            let mut data = Vec::new();
-            let encoder = image::codecs::png::PngEncoder::new_with_quality(
-                &mut data,
-                image::codecs::png::CompressionType::Best,
-                image::codecs::png::FilterType::NoFilter,
-            );
+                let mut data = Vec::new();
+                let encoder = image::codecs::png::PngEncoder::new_with_quality(
+                    &mut data,
+                    image::codecs::png::CompressionType::Best,
+                    image::codecs::png::FilterType::NoFilter,
+                );
 
-            encoder
+                encoder
                 .write_image(
                     &image.into_vec(),
                     self.size.0,
@@ -120,7 +204,11 @@ impl Workspace<'_> {
                 )
                 .unwrap();
 
-            images.push(data.to_vec());
+                images.push(data.to_vec());
+            } 
+            {
+                let mask_image = todo!();
+            }
         }
 
         for image in images {

@@ -1,4 +1,4 @@
-use image::{ImageBuffer, ImageFormat, ImageReader, Rgba};
+use image::{ImageBuffer, ImageFormat, ImageReader, Rgba, Luma};
 use serde::{Deserialize, Serialize};
 use wgpu::Texture;
 
@@ -18,6 +18,8 @@ pub struct LayerCreationInfo {
     pub init_texture: Option<Texture>,
     pub init_image: Option<ImageBuffer<Rgba<u8>, Vec<u8>>>,
     pub init_rgba: Option<[u8; 4]>,
+    pub init_mask_texture: Option<Texture>,
+    pub init_mask_image: Option<ImageBuffer<Luma<u8>, Vec<u8>>>,
 }
 
 impl Default for LayerCreationInfo {
@@ -30,6 +32,8 @@ impl Default for LayerCreationInfo {
             init_texture: None,
             init_image: None,
             init_rgba: None,
+            init_mask_texture: None,
+            init_mask_image: None,
         }
     }
 }

@@ -1,8 +1,12 @@
 @group(0) @binding(0)
-var inImage : texture_storage_2d<rgba8unorm, read>;
+var in_image : texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(1)
-var running_total : texture_storage_2d<rgba8unorm, read_write>;
+var running_total : texture_storage_2d<rgba8unorm, read>;
 @group(0) @binding(2)
+var out_image : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(3)
+var mask : texture_storage_2d<r8unorm, read>;
+@group(0) @binding(4)
 var<uniform> opacity : f32;
 
 fn rand(p : vec2<u32>) -> f32 {
@@ -19,8 +23,16 @@ fn rand(p : vec2<u32>) -> f32 {
 fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
     let pixelCoord : vec2<u32> = GlobalInvocationID.xy;
 
-    var pixel = vec4<f32>(textureLoad(inImage, vec2<i32>(pixelCoord)));
+    var pixel = vec4<f32>(textureLoad(in_image, vec2<i32>(pixelCoord)));
     pixel.a *= opacity;
+
+    let mask_texture_dimensions = textureDimensions(mask);
+
+    if (mask_texture_dimensions.x != 0) && (mask_texture_dimensions.y != 0) {
+        let mask_value = textureLoad(mask, vec2<i32>(pixelCoord)).r;
+        pixel.a *= mask_value;
+    }
+
     let alpha = pixel.a;
 
     let cur = vec4<f32>(textureLoad(running_total, vec2<i32>(pixelCoord)));
@@ -34,5 +46,5 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
         blended_color = cur;
     };
 
-    textureStore(running_total, vec2<i32>(pixelCoord), blended_color);
+    textureStore(out_image, vec2<i32>(pixelCoord), blended_color);
 }
