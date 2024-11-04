@@ -37,7 +37,7 @@ impl<'a> App<'a> {
 }
 
 impl eframe::App for App<'_> {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {        
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("Joyful Create");
@@ -136,7 +136,7 @@ impl eframe::App for App<'_> {
                             egui::Key::F5 => {
                                 if !*pressed {
                                     continue;
-        }
+                                }
                                 self.runtime
                                     .block_on(self.workspace.save("saved.jc", &self.gpu));
                             }

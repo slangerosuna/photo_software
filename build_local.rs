@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use naga::front::wgsl;
-use naga::valid::{Validator, ValidationFlags, Capabilities};
 use naga::back::spv;
+use naga::front::wgsl;
+use naga::valid::{Capabilities, ValidationFlags, Validator};
 
 fn main() {
     println!("cargo:rerun-if-changed=shaders");
@@ -49,7 +49,9 @@ fn compile_and_copy_files(from: &Path, to: &Path) {
 
             let mut spv_writer = spv::Writer::new(&options).unwrap();
             let mut spv_words = Vec::<u32>::new();
-            spv_writer.write(&module, &module_info, None, &None, &mut spv_words).unwrap();
+            spv_writer
+                .write(&module, &module_info, None, &None, &mut spv_words)
+                .unwrap();
 
             let spv_bytes = spv_words
                 .iter()

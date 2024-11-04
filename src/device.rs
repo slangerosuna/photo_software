@@ -44,7 +44,7 @@ impl GpuDevice {
 
         for file in files {
             let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
-            
+
             #[cfg(add_shaders)]
             if file_extension == "wgsl" {
                 let module = render_state

@@ -29,10 +29,8 @@ fn main(@builtin(global_invocation_id) GlobalInvocationID : vec3<u32>) {
 
     let mask_texture_dimensions = textureDimensions(mask);
 
-    if (mask_texture_dimensions.x != 0) && (mask_texture_dimensions.y != 0) {
-        let mask_value = textureLoad(mask, vec2<i32>(pixelCoord)).r;
-        sum = sum * mask_value + cur * (1.0 - mask_value);
-    }
+    let mask_value = textureLoad(mask, vec2<i32>(pixelCoord)).r;
+    sum = sum * mask_value + cur * (1.0 - mask_value);
 
 	textureStore(out_image, vec2<i32>(pixelCoord), vec4<f32>(sum));
 }

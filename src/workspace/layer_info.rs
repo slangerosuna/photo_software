@@ -1,4 +1,4 @@
-use image::{ImageBuffer, ImageFormat, ImageReader, Rgba, Luma};
+use image::{ImageBuffer, ImageFormat, ImageReader, Luma, Rgba};
 use serde::{Deserialize, Serialize};
 use wgpu::Texture;
 

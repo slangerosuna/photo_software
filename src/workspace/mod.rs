@@ -3,8 +3,8 @@ use egui::{Image, PaintCallbackInfo, TextureId};
 use egui_wgpu::CallbackTrait;
 use image::{ImageBuffer, ImageFormat, ImageReader, Rgba};
 use serde::{Deserialize, Serialize};
-use util::{DeviceExt, TextureDataOrder};
 use std::{borrow::Borrow, default::Default, io::Cursor};
+use util::{DeviceExt, TextureDataOrder};
 use wgpu::*;
 
 pub mod layer_info;
@@ -133,7 +133,7 @@ impl Workspace<'_> {
 
             layer_texture
         };
-        
+
         #[cfg(debug_assertions)]
         assert_eq!(
             None, info.init_image,
@@ -148,8 +148,7 @@ impl Workspace<'_> {
         let mask = if info.init_mask_texture.is_some() {
             info.init_mask_texture.take().unwrap()
         } else if info.init_mask_image.is_some() {
-            let mask_data = 
-                info.init_mask_image.take().unwrap().into_vec();
+            let mask_data = info.init_mask_image.take().unwrap().into_vec();
 
             let mask_texture = gpu.render_state.device.create_texture(&TextureDescriptor {
                 label: None,
@@ -194,26 +193,29 @@ impl Workspace<'_> {
         } else {
             // fill with 100% opacity
             let mask_data: Vec<u8> = vec![255; (self.size.0 * self.size.1) as usize];
-            gpu.render_state.device.create_texture_with_data(&gpu.render_state.queue, &TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width: self.size.0,
-                    height: self.size.1,
-                    depth_or_array_layers: 1,
+            gpu.render_state.device.create_texture_with_data(
+                &gpu.render_state.queue,
+                &TextureDescriptor {
+                    label: None,
+                    size: Extent3d {
+                        width: self.size.0,
+                        height: self.size.1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::R8Unorm,
+                    usage: TextureUsages::RENDER_ATTACHMENT
+                        | TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::STORAGE_BINDING
+                        | TextureUsages::COPY_SRC,
+                    view_formats: &[TextureFormat::R8Unorm],
                 },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::R8Unorm,
-                usage: TextureUsages::RENDER_ATTACHMENT
-                    | TextureUsages::TEXTURE_BINDING
-                    | TextureUsages::COPY_DST
-                    | TextureUsages::STORAGE_BINDING
-                    | TextureUsages::COPY_SRC,
-                view_formats: &[TextureFormat::R8Unorm],
-            },
-            TextureDataOrder::LayerMajor,
-            &mask_data,)
+                TextureDataOrder::LayerMajor,
+                &mask_data,
+            )
         };
 
         let running_total = gpu.render_state.device.create_texture(&TextureDescriptor {
@@ -235,7 +237,11 @@ impl Workspace<'_> {
             view_formats: &[TextureFormat::Rgba8Unorm],
         });
 
-        let layer_data = LayerData { texture, mask, running_total };
+        let layer_data = LayerData {
+            texture,
+            mask,
+            running_total,
+        };
         let layer_data = Box::new(layer_data);
 
         match index {
@@ -272,7 +278,7 @@ impl Workspace<'_> {
                 | TextureUsages::STORAGE_BINDING,
             view_formats: &[TextureFormat::Rgba8Unorm],
         }));
-        
+
         #[cfg(debug_assertions)]
         println!("Blanking eternal blank texture...");
         let clear_color = Rgba([0, 0, 0, 0]);
@@ -284,12 +290,19 @@ impl Workspace<'_> {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &self.eternal_blank.as_ref().unwrap().create_view(
-                        &TextureViewDescriptor::default(),
-                    ),
+                    view: &self
+                        .eternal_blank
+                        .as_ref()
+                        .unwrap()
+                        .create_view(&TextureViewDescriptor::default()),
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(Color {r: 0.0, g: 0.0, b: 0.0, a: 0.0}),
+                        load: LoadOp::Clear(Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
+                        }),
                         store: StoreOp::Store,
                     },
                 })],
@@ -300,7 +313,7 @@ impl Workspace<'_> {
         }
 
         gpu.render_state.queue.submit(Some(encoder.finish()));
-        
+
         #[cfg(debug_assertions)]
         println!("Creating output texture...");
         self.output_texture = Some(gpu.render_state.device.create_texture(&TextureDescriptor {
@@ -436,24 +449,23 @@ impl Workspace<'_> {
                         },
                         BindGroupEntry {
                             binding: 1,
-                            resource: BindingResource::TextureView(
-                                &if start == 0 {
-                                    self.eternal_blank.as_ref().unwrap().create_view(
-                                        &TextureViewDescriptor::default(),
-                                    )
-                                } else {
-                                    self.layer_data[i - 1].running_total.create_view(
-                                        &TextureViewDescriptor::default(),
-                                    )
-                                }
-                            ),
+                            resource: BindingResource::TextureView(&if start == 0 {
+                                self.eternal_blank
+                                    .as_ref()
+                                    .unwrap()
+                                    .create_view(&TextureViewDescriptor::default())
+                            } else {
+                                self.layer_data[i - 1]
+                                    .running_total
+                                    .create_view(&TextureViewDescriptor::default())
+                            }),
                         },
                         BindGroupEntry {
                             binding: 2,
                             resource: BindingResource::TextureView(
-                                &self.layer_data[i].running_total.create_view(
-                                    &TextureViewDescriptor::default(),
-                                ),
+                                &self.layer_data[i]
+                                    .running_total
+                                    .create_view(&TextureViewDescriptor::default()),
                             ),
                         },
                         BindGroupEntry {

@@ -80,7 +80,9 @@ impl Workspace<'_> {
                 },
             );
 
-            let mask_len: [u8; 4] = (&mut data).next_chunk::<4>().expect("layer not provided with mask");
+            let mask_len: [u8; 4] = (&mut data)
+                .next_chunk::<4>()
+                .expect("layer not provided with mask");
             let mask_len = u32::from_le_bytes(mask_len) as usize;
 
             let mask_data = (&mut data).take(mask_len).collect::<Vec<u8>>();
@@ -196,16 +198,16 @@ impl Workspace<'_> {
                 );
 
                 encoder
-                .write_image(
-                    &image.into_vec(),
-                    self.size.0,
-                    self.size.1,
-                    image::ExtendedColorType::Rgba8,
-                )
-                .unwrap();
+                    .write_image(
+                        &image.into_vec(),
+                        self.size.0,
+                        self.size.1,
+                        image::ExtendedColorType::Rgba8,
+                    )
+                    .unwrap();
 
                 images.push(data.to_vec());
-            } 
+            }
             {
                 let mask_image = todo!();
             }
