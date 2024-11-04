@@ -1,5 +1,9 @@
 use std::path::Path;
 
+use naga::front::wgsl;
+use naga::valid::{Validator, ValidationFlags, Capabilities};
+use naga::back::spv;
+
 fn main() {
     println!("cargo:rerun-if-changed=shaders");
     println!("cargo:rerun-if-changed=build.rs");
