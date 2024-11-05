@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::process::Command;
 
 use naga::back::spv;
 use naga::front::wgsl;
@@ -62,6 +63,14 @@ fn compile_and_copy_files(from: &Path, to: &Path) {
             let new_file = new_file.with_extension("spv");
 
             std::fs::write(&new_file, &spv_bytes).unwrap();
+
+            // ignore errors since spirv-tools might not be installed
+            _ = Command::new("spirv-opt")
+                .arg("-O")
+                .arg(&new_file)
+                .arg("-o")
+                .arg(&new_file)
+                .output();
         }
     }
 }

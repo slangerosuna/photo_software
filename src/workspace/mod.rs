@@ -52,7 +52,7 @@ impl Default for Workspace<'_> {
     }
 }
 
-struct LayerData {
+pub struct LayerData {
     texture: Texture,
     mask: Texture,
     running_total: Texture,

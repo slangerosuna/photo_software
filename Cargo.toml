@@ -22,3 +22,11 @@ bincode = "1.3.3"
 
 [build-dependencies]
 naga = { version = "23.0.0", features = ["wgsl-in", "spv-out"] }
+
+[profile.dev]
+opt-level = 1
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+overflow-checks = false
