@@ -8,6 +8,7 @@ pub struct LayerInfo {
     pub visible: bool,
     pub opacity: f32,
     pub blend_mode: BlendMode,
+    pub is_tool_layer: bool,
 }
 
 pub struct LayerCreationInfo {
@@ -20,6 +21,8 @@ pub struct LayerCreationInfo {
     pub init_rgba: Option<[u8; 4]>,
     pub init_mask_texture: Option<Texture>,
     pub init_mask_image: Option<ImageBuffer<Luma<u8>, Vec<u8>>>,
+    pub init_mask_luma: Option<u8>,
+    pub is_tool_layer: bool,
 }
 
 impl Default for LayerCreationInfo {
@@ -34,6 +37,8 @@ impl Default for LayerCreationInfo {
             init_rgba: None,
             init_mask_texture: None,
             init_mask_image: None,
+            init_mask_luma: None,
+            is_tool_layer: false,
         }
     }
 }
@@ -45,6 +50,7 @@ impl From<LayerCreationInfo> for LayerInfo {
             visible: info.visible,
             opacity: info.opacity,
             blend_mode: info.blend_mode,
+            is_tool_layer: info.is_tool_layer,
         }
     }
 }

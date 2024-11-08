@@ -7,7 +7,7 @@ use super::Workspace;
 use crate::device::{pad_to_multiple_of_256, GpuDevice};
 use crate::workspace::LayerData;
 
-impl Workspace<'_> {
+impl Workspace {
     pub fn load(path: &str, gpu: &GpuDevice) -> Result<Self, Box<dyn std::error::Error>> {
         #[cfg(debug_assertions)]
         println!("Loading workspace at {}...", path);

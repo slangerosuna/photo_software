@@ -28,7 +28,7 @@ use egui::{
 };
 use egui_wgpu::{RenderState, WgpuConfiguration};
 use tokio::runtime::Runtime;
-use workspace::{layer_info::LayerCreationInfo, tools::ActionOrigin, Workspace};
+use workspace::{layer_info::LayerCreationInfo, tools::{brush::{BrushTool, BrushToolSettings}, ActionOrigin}, Workspace};
 
 fn main() -> eframe::Result {
     let args = std::env::args().collect::<Vec<String>>();
@@ -107,6 +107,19 @@ fn main() -> eframe::Result {
                         &gpu,
                         None,
                     );
+
+                    let tool: BrushTool = BrushTool::new(
+                        BrushToolSettings {
+                            size: 30.0,
+                            color: Some([100, 255, 0, 255]),
+                            blend_mode: "normal".to_string(),
+                            hardness: 0.0,
+                            ..Default::default()
+                        },
+                        &gpu,
+                    );
+                    workspace.set_tool(Box::new(tool));
+
                     workspace
                 }
                 Some(path) => Workspace::load("saved.jc", &gpu).expect("Failed to load workspace"),

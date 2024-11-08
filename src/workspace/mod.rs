@@ -18,11 +18,14 @@ pub use workspace_serialization::*;
 use crate::GpuDevice;
 
 #[derive(Serialize, Deserialize)]
-pub struct Workspace<'a> {
+pub struct Workspace {
     pub size: (u32, u32),
     pub zoom: f32,
     pub pixel_at_center: (f32, f32),
     pub layers: Vec<LayerInfo>,
+
+    #[serde(skip)]
+    pub selected_layer: Option<usize>,
 
     #[serde(skip)]
     pub layer_data: Vec<Box<LayerData>>,
@@ -31,13 +34,13 @@ pub struct Workspace<'a> {
     pub output_texture: Option<Texture>,
 
     #[serde(skip)]
-    pub selected_tool: &'a dyn Tool,
+    pub selected_tool: Option<Box<dyn Tool>>,
 
     #[serde(skip)]
     pub eternal_blank: Option<Texture>,
 }
 
-impl Default for Workspace<'_> {
+impl Default for Workspace {
     fn default() -> Self {
         Self {
             size: (512, 512),
@@ -46,8 +49,9 @@ impl Default for Workspace<'_> {
             layers: Vec::new(),
             layer_data: Vec::new(),
             output_texture: None,
-            selected_tool: &SelectTool,
+            selected_tool: None,
             eternal_blank: None,
+            selected_layer: None,
         }
     }
 }
@@ -58,8 +62,21 @@ pub struct LayerData {
     running_total: Texture,
 }
 
-impl Workspace<'_> {
+impl Workspace {
+    pub fn set_tool(&mut self, tool: Box<dyn Tool>) {
+        self.selected_tool = Some(tool);
+    }
     pub fn move_layer(&mut self, from: usize, to: usize, gpu: &GpuDevice) {
+        if let Some(selected_layer) = self.selected_layer {
+            match selected_layer {
+                from => self.selected_layer = Some(to),
+                to => self.selected_layer = Some(from),
+                i if i > from && i < to => self.selected_layer = Some(i - 1),
+                i if i < from && i > to => self.selected_layer = Some(i + 1),
+                _ => (),
+            }
+        }
+
         let info = self.layers.remove(from);
         self.layers.insert(to, info);
 
@@ -75,6 +92,15 @@ impl Workspace<'_> {
         gpu: &GpuDevice,
         index: Option<usize>,
     ) {
+        match index {
+            Some(index) if index > self.layers.len() => {
+                panic!("index out of bounds");
+            }
+            Some(index) if index <= self.selected_layer.unwrap_or(0) => {
+                self.selected_layer = self.selected_layer.map(|i| i + 1);
+            }
+            _ => {}
+        }
         let texture = if info.init_texture.is_some() {
             info.init_texture.take().unwrap()
         } else {
@@ -191,8 +217,9 @@ impl Workspace<'_> {
 
             mask_texture
         } else {
+            let mask_luma = info.init_mask_luma.take().unwrap_or(255);
             // fill with 100% opacity
-            let mask_data: Vec<u8> = vec![255; (self.size.0 * self.size.1) as usize];
+            let mask_data: Vec<u8> = vec![mask_luma; (self.size.0 * self.size.1) as usize];
             gpu.render_state.device.create_texture_with_data(
                 &gpu.render_state.queue,
                 &TextureDescriptor {
@@ -449,14 +476,18 @@ impl Workspace<'_> {
                         },
                         BindGroupEntry {
                             binding: 1,
-                            resource: BindingResource::TextureView(&if start == 0 {
+                            resource: BindingResource::TextureView(&if let Some(last_visible) =
+                                (0..i).rev().find(|&j| self.layers[j].visible)
+                            {
+                                let last_visible: usize =
+                                    (0..i).rev().find(|&j| self.layers[j].visible).unwrap();
+                                self.layer_data[i - 1]
+                                    .running_total
+                                    .create_view(&TextureViewDescriptor::default())
+                            } else {
                                 self.eternal_blank
                                     .as_ref()
                                     .unwrap()
-                                    .create_view(&TextureViewDescriptor::default())
-                            } else {
-                                self.layer_data[i - 1]
-                                    .running_total
                                     .create_view(&TextureViewDescriptor::default())
                             }),
                         },
@@ -523,31 +554,62 @@ impl Workspace<'_> {
             gpu.render_state.queue.submit(Some(encoder.finish()));
         }
 
-        let last_layer = &self.layer_data[self.layers.len() - 1];
-        let mut encoder = gpu
-            .render_state
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
-        encoder.copy_texture_to_texture(
-            ImageCopyTexture {
-                texture: &last_layer.running_total,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            ImageCopyTexture {
-                texture: self.output_texture.as_ref().unwrap(),
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            Extent3d {
-                width: self.size.0,
-                height: self.size.1,
-                depth_or_array_layers: 1,
-            },
-        );
-        gpu.render_state.queue.submit(Some(encoder.finish()));
+        let last_visible = (0..self.layers.len())
+            .rev()
+            .find(|&i| self.layers[i].visible);
+        if let Some(last_visible) = last_visible {
+            let last_visible: usize = last_visible;
+            let last_layer = &self.layer_data[last_visible];
+            let mut encoder = gpu
+                .render_state
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            encoder.copy_texture_to_texture(
+                ImageCopyTexture {
+                    texture: &last_layer.running_total,
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                ImageCopyTexture {
+                    texture: self.output_texture.as_ref().unwrap(),
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                Extent3d {
+                    width: self.size.0,
+                    height: self.size.1,
+                    depth_or_array_layers: 1,
+                },
+            );
+            gpu.render_state.queue.submit(Some(encoder.finish()));
+        } else {
+            let mut encoder = gpu
+                .render_state
+                .device
+                .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            encoder.copy_texture_to_texture(
+                ImageCopyTexture {
+                    texture: self.eternal_blank.as_ref().unwrap(),
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                ImageCopyTexture {
+                    texture: self.output_texture.as_ref().unwrap(),
+                    mip_level: 0,
+                    origin: Origin3d::ZERO,
+                    aspect: TextureAspect::All,
+                },
+                Extent3d {
+                    width: self.size.0,
+                    height: self.size.1,
+                    depth_or_array_layers: 1,
+                },
+            );
+            gpu.render_state.queue.submit(Some(encoder.finish()));
+        }
     }
     pub fn register_output_texture(&self, cc: &CreationContext) -> TextureId {
         let renderer = cc.wgpu_render_state.as_ref().unwrap().renderer.clone();
@@ -563,7 +625,10 @@ impl Workspace<'_> {
         drop(renderer);
         id
     }
-    pub fn perform_action(&mut self, origin: ActionOrigin) {
-        self.selected_tool.perform_action(self, origin);
+    pub fn perform_action(&mut self, gpu: &GpuDevice, origin: ActionOrigin) {
+        if let Some(mut tool) = self.selected_tool.take() {
+            tool.perform_action(self, gpu, origin);
+            self.selected_tool = Some(tool);
+        }
     }
 }

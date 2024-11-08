@@ -5,24 +5,24 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 use wgpu::*;
 
-pub struct App<'a> {
+pub struct App {
     gpu: GpuDevice,
     runtime: Arc<Runtime>,
     output_tex: TextureId,
-    workspace: Workspace<'a>,
+    workspace: Workspace,
     prev_mouse_pos: Pos2,
     sec_mouse_down: bool,
     prim_mouse_down: bool,
     central_panel_center: Pos2,
 }
 
-impl<'a> App<'a> {
+impl App {
     pub fn new(
         gpu: GpuDevice,
         runtime: Arc<Runtime>,
         output_tex: TextureId,
-        workspace: Workspace<'a>,
-    ) -> App<'a> {
+        workspace: Workspace,
+    ) -> App {
         Self {
             gpu,
             runtime,
@@ -36,12 +36,11 @@ impl<'a> App<'a> {
     }
 }
 
-impl eframe::App for App<'_> {
+impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Joyful Create");
-                ui.label("v0.1");
+                ui.label("Joyful Create v0.0.5");
             });
         });
 
@@ -55,6 +54,27 @@ impl eframe::App for App<'_> {
                 .min_height(max_rect.height() / 2.)
                 .show_inside(ui, |ui| {
                     ui.heading("Layers");
+
+                    let len = self.workspace.layers.len();
+                    for i in 0..len {
+                        let layer_info = &mut self.workspace.layers[len - i - 1];
+                        if layer_info.is_tool_layer {
+                            continue;
+                        }
+
+                        let mut click_flag = false;
+                        ui.horizontal(|ui| {
+                            ui.label(&layer_info.name);
+                            click_flag = ui
+                                .add(egui::Checkbox::new(&mut layer_info.visible, ""))
+                                .interact(Sense::click())
+                                .clicked();
+                        });
+                        if click_flag {
+                            self.workspace
+                                .recalculate_output_texture(&self.gpu, len - i - 1);
+                        }
+                    }
                 });
         });
 
@@ -63,8 +83,8 @@ impl eframe::App for App<'_> {
                 for event in reader.events.iter() {
                     match event {
                         egui::Event::PointerMoved(pos) => {
+                            let delta = *pos - self.prev_mouse_pos;
                             if self.sec_mouse_down {
-                                let delta = *pos - self.prev_mouse_pos;
                                 self.workspace.pixel_at_center = (
                                     self.workspace.pixel_at_center.0
                                         - (delta.x / self.workspace.zoom),
@@ -74,8 +94,19 @@ impl eframe::App for App<'_> {
                             }
                             self.prev_mouse_pos = *pos;
 
+                            let mouse_loc = (
+                                (pos.x - self.central_panel_center.x) / self.workspace.zoom,
+                                (pos.y - self.central_panel_center.y) / self.workspace.zoom,
+                            );
+
+                            let mouse_loc = (
+                                mouse_loc.0 + self.workspace.pixel_at_center.0,
+                                mouse_loc.1 + self.workspace.pixel_at_center.1,
+                            );
+
                             if self.prim_mouse_down {
-                                self.workspace.perform_action(ActionOrigin::MouseMove);
+                                self.workspace
+                                    .perform_action(&self.gpu, ActionOrigin::MouseMove(mouse_loc));
                             }
                         }
                         egui::Event::MouseWheel {
@@ -120,6 +151,28 @@ impl eframe::App for App<'_> {
                         } => match button {
                             egui::PointerButton::Primary => {
                                 self.prim_mouse_down = *pressed;
+
+                                let mouse_loc = (
+                                    (pos.x - self.central_panel_center.x) / self.workspace.zoom,
+                                    (pos.y - self.central_panel_center.y) / self.workspace.zoom,
+                                );
+
+                                let mouse_loc = (
+                                    mouse_loc.0 + self.workspace.pixel_at_center.0,
+                                    mouse_loc.1 + self.workspace.pixel_at_center.1,
+                                );
+
+                                if *pressed {
+                                    self.workspace.perform_action(
+                                        &self.gpu,
+                                        ActionOrigin::MouseDown(mouse_loc),
+                                    );
+                                } else {
+                                    self.workspace.perform_action(
+                                        &self.gpu,
+                                        ActionOrigin::MouseUp(mouse_loc),
+                                    );
+                                }
                             }
                             egui::PointerButton::Secondary => {
                                 self.sec_mouse_down = *pressed;

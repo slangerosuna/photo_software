@@ -16,7 +16,11 @@ fn rand(p : vec2<u32>) -> f32 {
     h32 = p4 * ((h32 << 17) | (h32 >> (32 - 17)));
     h32 = p2 * (h32^(h32 >> 15));
     h32 = p3 * (h32^(h32 >> 13));
-    return fract(sin(f32(h32^(h32 >> 16))));
+    let h = sin(f32(h32^(h32 >> 16)));
+    // convert to evenly distributed random number
+    let r = fract(h * 43758.5453123);
+
+    return r;
 }
 
 @compute @workgroup_size(16, 16, 1)
