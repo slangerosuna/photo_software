@@ -45,61 +45,47 @@ impl GpuDevice {
         for file in files {
             let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
 
-            if file_extension == "wgsl" {
-                let module = render_state
-                    .device
-                    .create_shader_module(ShaderModuleDescriptor {
-                        label: None,
-                        source: ShaderSource::Wgsl(
-                            std::fs::read_to_string(file.clone()).unwrap().into(),
-                        ),
-                    });
+            let shader = match file_extension.as_str() {
+                "wgsl" => {
+                    render_state
+                        .device
+                        .create_shader_module(ShaderModuleDescriptor {
+                            label: None,
+                            source: ShaderSource::Wgsl(
+                                std::fs::read_to_string(file.clone()).unwrap().into(),
+                            ),
+                        })
+                },
+                "spv" => {
+                    let shader_data: Vec<u8> = std::fs::read(file.clone()).unwrap();
+                    let source = wgpu::util::make_spirv(&shader_data);
 
-                let relative_file = file
-                    .strip_prefix(&shaders_dir)
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-                    .strip_suffix(".wgsl")
-                    .unwrap()
-                    .to_string();
+                    render_state
+                        .device
+                        .create_shader_module(ShaderModuleDescriptor {
+                            label: None,
+                            source,
+                        })
+                },
+                _ => continue,
+            };
 
-                // replace `\\` with `/` for windows`
-                let relative_file = relative_file.replace("\\", "/");
+            let relative_file = file
+                .strip_prefix(&shaders_dir)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()
+                .strip_suffix(&format!(".{}", file_extension))
+                .unwrap()
+                .to_string();
 
-                #[cfg(debug_assertions)]
-                print!("Loaded shader: {}\n", relative_file);
-                shaders.insert(relative_file, module);
-            }
-            if file_extension == "spv" {
-                let shader_data: Vec<u8> = std::fs::read(file.clone()).unwrap();
-                let source = wgpu::util::make_spirv(&shader_data);
+            // replace `\\` with `/` for windows`
+            let relative_file = relative_file.replace("\\", "/");
 
-                let module = render_state
-                    .device
-                    .create_shader_module(ShaderModuleDescriptor {
-                        label: None,
-                        source,
-                    });
-
-                let relative_file = file
-                    .strip_prefix(&shaders_dir)
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_string()
-                    .strip_suffix(".spv")
-                    .unwrap()
-                    .to_string();
-
-                // replace `\\` with `/` for windows`
-                let relative_file = relative_file.replace("\\", "/");
-
-                #[cfg(debug_assertions)]
-                print!("Loaded shader: {}\n", relative_file);
-                shaders.insert(relative_file, module);
-            }
+            #[cfg(debug_assertions)]
+            print!("Loaded shader: {}\n", relative_file);
+            shaders.insert(relative_file, shader);
         }
 
         Some(Self {
