@@ -49,11 +49,6 @@ fn main() -> eframe::Result {
                 println!("Not a file: {}", file_to_load.display());
                 return Ok(());
             }
-            if file_to_load.extension().unwrap() != "jc" {
-                println!("Invalid file extension: {}", file_to_load.display());
-                println!("Only .jc files are supported.");
-                return Ok(());
-            }
 
             Some(file_to_load)
         }
@@ -110,7 +105,7 @@ fn main() -> eframe::Result {
 
                     let tool: BrushTool = BrushTool::new(
                         BrushToolSettings {
-                            size: 30.0,
+                            size: 50.0,
                             color: Some([100, 255, 0, 255]),
                             blend_mode: "normal".to_string(),
                             hardness: 0.0,
@@ -122,7 +117,42 @@ fn main() -> eframe::Result {
 
                     workspace
                 }
-                Some(path) => Workspace::load("saved.jc", &gpu).expect("Failed to load workspace"),
+                Some(path) => {
+                    let extension = path.extension().unwrap().to_str().unwrap();
+
+                    match extension {
+                        "jc" => {
+                            let workspace = Workspace::load(path.to_str().unwrap(), &gpu).unwrap();
+                            workspace
+                        },
+                        "png" => {
+                            let image = image::open(path).unwrap();
+                            let image = image.to_rgba8();
+                            let width = image.width();
+                            let height = image.height();
+
+                            let mut workspace = Workspace {
+                                size: (width, height),
+                                ..Default::default()
+                            };
+
+                            workspace.create_layer(
+                                LayerCreationInfo {
+                                    name: "Background".to_string(),
+                                    init_image: Some(image),
+                                    ..Default::default()
+                                },
+                                &gpu,
+                                None,
+                            );
+                            workspace
+                        },
+                        _ => {
+                            println!("Unsupported file type: {}", extension);
+                            Workspace::default()
+                        }
+                    }
+                }
             };
 
             let output_tex = workspace.register_output_texture(cc);
