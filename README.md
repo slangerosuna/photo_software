@@ -4,11 +4,12 @@ Joyful Create is planned to be an advanced image editing application written in 
 
 ## Installation
 
-Joyful Create is on [crates.io](https://crates.io/crates/joyful_create), so it can be installed with Cargo
+Joyful Create is on [crates.io](https://crates.io/crates/joyful_create), so it can be installed with Cargo.
 
 ```sh
 cargo install joyful_create
 ```
+While it is optional, installing [SPIRV-Tools](https://github.com/KhronosGroup/SPIRV-Tools) will allow the build script to use the `spirv-opt` command which will result in better performance.
 
 ## Usage
 
