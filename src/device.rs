@@ -46,16 +46,14 @@ impl GpuDevice {
             let file_extension = file.extension().unwrap().to_str().unwrap().to_string();
 
             let shader = match file_extension.as_str() {
-                "wgsl" => {
-                    render_state
-                        .device
-                        .create_shader_module(ShaderModuleDescriptor {
-                            label: None,
-                            source: ShaderSource::Wgsl(
-                                std::fs::read_to_string(file.clone()).unwrap().into(),
-                            ),
-                        })
-                },
+                "wgsl" => render_state
+                    .device
+                    .create_shader_module(ShaderModuleDescriptor {
+                        label: None,
+                        source: ShaderSource::Wgsl(
+                            std::fs::read_to_string(file.clone()).unwrap().into(),
+                        ),
+                    }),
                 "spv" => {
                     let shader_data: Vec<u8> = std::fs::read(file.clone()).unwrap();
                     let source = wgpu::util::make_spirv(&shader_data);
@@ -66,7 +64,7 @@ impl GpuDevice {
                             label: None,
                             source,
                         })
-                },
+                }
                 _ => continue,
             };
 

@@ -28,7 +28,14 @@ use egui::{
 };
 use egui_wgpu::{RenderState, WgpuConfiguration};
 use tokio::runtime::Runtime;
-use workspace::{layer_info::LayerCreationInfo, tools::{brush::{BrushTool, BrushToolSettings}, ActionOrigin}, Workspace};
+use workspace::{
+    layer_info::LayerCreationInfo,
+    tools::{
+        brush::{BrushTool, BrushToolSettings},
+        ActionOrigin,
+    },
+    Workspace,
+};
 
 fn main() -> eframe::Result {
     let args = std::env::args().collect::<Vec<String>>();
@@ -124,7 +131,7 @@ fn main() -> eframe::Result {
                         "jc" => {
                             let workspace = Workspace::load(path.to_str().unwrap(), &gpu).unwrap();
                             workspace
-                        },
+                        }
                         "png" => {
                             let image = image::open(path).unwrap();
                             let image = image.to_rgba8();
@@ -146,7 +153,7 @@ fn main() -> eframe::Result {
                                 None,
                             );
                             workspace
-                        },
+                        }
                         _ => {
                             println!("Unsupported file type: {}", extension);
                             Workspace::default()

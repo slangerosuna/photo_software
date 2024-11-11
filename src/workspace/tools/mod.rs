@@ -1,4 +1,5 @@
 pub mod brush;
+pub mod brush_new;
 pub mod select;
 
 use crate::GpuDevice;
